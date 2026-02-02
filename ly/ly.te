@@ -1,0 +1,49 @@
+policy_module(ly, 1.0)
+
+gen_require(`
+    type init_t;
+    type xdm_t;
+    type xdm_exec_t;
+    type xdm_rw_etc_t;
+    type shadow_t;
+    type tty_device_t;
+    type pam_t;
+    type shell_exec_t;
+    type bin_t;
+    type unconfined_t;
+    type systemd_logind_t;
+    type devpts_t;
+    type ptmx_t;
+    type system_dbust_t;
+    type dri_device_t;
+    type input_device_t;
+    class process { transition dyntransition setexec signal siginh rlimitinh noatsecure getattr };
+    class file { create read write open getattr unlink rename execute execute_no_trans map };
+    class chr_file { read write open ioctl getattr mmap };
+    class dbus send_msg;
+    class dir { create read write add_name remove_name search open getattr };
+')
+
+# --- Domain Transitions (Essential) ---
+type_transition xdm_t shell_exec_t : process unconfined_t;
+allow xdm_t unconfined_t:process transition;
+allow xdm_t self:process { setexec dyntransition signal getattr };
+
+# --- Persistence (/etc/ly/save.txt) ---
+allow xdm_t xdm_rw_etc_t:dir { create read write add_name remove_name search open getattr };
+allow xdm_t xdm_rw_etc_t:file { create read write open getattr unlink rename };
+
+# --- Minimal Authentication & Hardware ---
+# shadow_t is required for PAM to verify your password.
+allow xdm_t shadow_t:file { read open getattr };
+allow xdm_t pam_t:process { signal };
+# Restricted to just the TTY and basic input needed for the TUI.
+allow xdm_t { tty_device_t dri_device_t input_device_t }:chr_file { read write open ioctl getattr mmap };
+
+# --- Terminal Support ---
+allow unconfined_t { ptmx_t devpts_t }:chr_file { read write open ioctl getattr };
+
+# --- System Integration ---
+allow xdm_t { systemd_logind_t system_dbust_t }:dbus send_msg;
+allow xdm_t systemd_logind_t:dir search;
+allow xdm_t systemd_logind_t:file { read open };
